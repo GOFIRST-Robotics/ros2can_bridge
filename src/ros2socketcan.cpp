@@ -9,17 +9,15 @@ using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
 
-ros2socketcan::ros2socketcan(std::string can_socket2) : Node("ros2" + can_socket2), stream(ios), signals(ios, SIGINT, SIGTERM) {}
-
-void ros2socketcan::Init(const char *can_socket)
+ros2socketcan::ros2socketcan() : Node("CanBridge"), stream(ios), signals(ios, SIGINT, SIGTERM)
 {
-    printf("Using can socket %s\n", can_socket);
+    this->declare_parameter("CAN_INTERFACE", "can1");
+    std::string can_socket = this->get_parameter("CAN_INTERFACE").as_string();
 
-    const char *canname = can_socket;
-
-    topicname_receive << "CAN/" << canname << "/"
+    RCLCPP_INFO(this->get_logger(), "CAN_INTERFACE: %s", can_socket.c_str());
+    topicname_receive << "CAN/" << can_socket << "/"
                       << "receive";
-    topicname_transmit << "CAN/" << canname << "/"
+    topicname_transmit << "CAN/" << can_socket << "/"
                        << "transmit";
 
     rclcpp::executors::MultiThreadedExecutor exec;
@@ -27,7 +25,7 @@ void ros2socketcan::Init(const char *can_socket)
     publisher_ = this->create_publisher<can_msgs::msg::Frame>(topicname_receive.str(), 10);
     subscription_ = this->create_subscription<can_msgs::msg::Frame>(topicname_transmit.str(), 100, std::bind(&ros2socketcan::CanPublisher, this, _1));
 
-    strcpy(ifr.ifr_name, can_socket);
+    strcpy(ifr.ifr_name, can_socket.c_str());
     ioctl(natsock, SIOCGIFINDEX, &ifr);
 
     addr.can_family = AF_CAN;
@@ -40,8 +38,8 @@ void ros2socketcan::Init(const char *can_socket)
 
     stream.assign(natsock);
 
-    std::cout << "ROS 2 to CAN-Bus topic:" << subscription_->get_topic_name() << std::endl;
-    std::cout << "CAN-Bus to ROS 2 topic:" << publisher_->get_topic_name() << std::endl;
+    RCLCPP_INFO(this->get_logger(), (std::string("ROS 2 to CAN-Bus topic:") + subscription_->get_topic_name()).c_str());
+    RCLCPP_INFO(this->get_logger(), (std::string("CAN-Bus to ROS 2 topic:") + publisher_->get_topic_name()).c_str());
 
     stream.async_read_some(boost::asio::buffer(&rec_frame, sizeof(rec_frame)), std::bind(&ros2socketcan::CanListener, this, std::ref(rec_frame), std::ref(stream)));
 
@@ -58,14 +56,14 @@ void ros2socketcan::Init(const char *can_socket)
 
 void ros2socketcan::stop()
 {
-    printf("\nEnd of Listener Thread. Please press strg+c again to stop the whole program.\n");
+    RCLCPP_INFO(this->get_logger(), "End of Listener Thread. Please press strg+c again to stop the whole program.\n");
     ios.stop();
     signals.clear();
 }
 
 ros2socketcan::~ros2socketcan()
 {
-    printf("\nEnd of Publisher Thread. \n");
+    RCLCPP_INFO(this->get_logger(), "End of Publisher Thread. \n");
 }
 
 void ros2socketcan::CanSend(const can_msgs::msg::Frame msg)
@@ -95,14 +93,14 @@ void ros2socketcan::CanSend(const can_msgs::msg::Frame msg)
     {
         frame1.data[i] = msg.data[i];
     }
-
-    printf("S | %x | ", frame1.can_id);
+    std::stringstream out;
+    out << std::string("S | ") << frame1.can_id << std::string("| ");
     for (int j = 0; j < (int)frame1.can_dlc; j++)
     {
-        printf("%i ", frame1.data[j]);
+        out << frame1.data[j] << std::string(" ");
     }
-    printf("\n");
-
+    out << std::endl;
+    RCLCPP_DEBUG(this->get_logger(), out.str().c_str());
     stream.async_write_some(boost::asio::buffer(&frame1, sizeof(frame1)), std::bind(&ros2socketcan::CanSendConfirm, this));
 }
 
@@ -122,7 +120,7 @@ void ros2socketcan::CanPublisher(const can_msgs::msg::Frame::SharedPtr msg)
 
 void ros2socketcan::CanSendConfirm(void)
 {
-    std::cout << "Message sent" << std::endl;
+    RCLCPP_DEBUG(this->get_logger(), "Message sent");
 }
 
 // Listen for CAN messages
@@ -135,21 +133,21 @@ void ros2socketcan::CanListener(struct can_frame &rec_frame, boost::asio::posix:
     frame.id = rec_frame.can_id;
     frame.dlc = int(rec_frame.can_dlc);
 
-    printf("R | %x | ", rec_frame.can_id);
+    s << std::string("R | ") << rec_frame.can_id << std::string("| ");
     for (int i = 0; i < rec_frame.can_dlc; i++)
     {
         frame.data[i] = rec_frame.data[i];
         s << rec_frame.data[i];
     }
     current_frame = frame;
-    std::cout << s.str() << " | ";
+    s << " | ";
 
     for (int j = 0; j < (int)rec_frame.can_dlc; j++)
     {
-        printf("%i ", rec_frame.data[j]);
+        s << rec_frame.data[j] << std::string(" ");
     }
-    printf("\n");
-
+    s << std::endl;
+    RCLCPP_DEBUG(this->get_logger(), s.str().c_str());
     publisher_->publish(frame);
 
     stream.async_read_some(boost::asio::buffer(&rec_frame, sizeof(rec_frame)), std::bind(&ros2socketcan::CanListener, this, std::ref(rec_frame), std::ref(stream)));
@@ -160,17 +158,7 @@ int main(int argc, char *argv[])
 {
     std::cout << programdescr << std::endl;
     rclcpp::init(argc, argv);
-
-    if (argc < 2)
-    {
-        auto ros2canptr = std::make_shared<ros2socketcan>();
-        ros2canptr->Init();
-    }
-    else
-    {
-        auto ros2canptr = std::make_shared<ros2socketcan>(argv[1]);
-        ros2canptr->Init(argv[1]);
-    }
+    rclcpp::spin(std::make_shared<ros2socketcan>());
 
     return 0;
 }

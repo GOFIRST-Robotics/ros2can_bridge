@@ -45,13 +45,7 @@ class ros2socketcan : public rclcpp::Node
          * @brief constructor for ros2socketcan class
          * @details Within the constructor the topic and service naming is done. 
          */
-        ros2socketcan(std::string can_socket2 = "can1");//boost::asio::io_service& ios);
-        
-        /**
-         * @brief Within the Init() fucntin the ROS 2 and CAN setup is done.
-         * @details Within the Init() function the ROS 2 publisher, subscriber and the service server is initialized. In addition the socketcan interface is configured and assigned to the socket. The Init function is necessary as the topics need a fully constructed node class to be added to.
-         */
-        void Init(const char* can_socket = "can1");//boost::asio::io_service& ios);
+        ros2socketcan();//boost::asio::io_service& ios);
         /**
          * @brief destructor
          */
