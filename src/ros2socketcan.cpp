@@ -9,7 +9,7 @@ using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
 
-ros2socketcan::ros2socketcan() : Node("CanBridge"), stream(ios), signals(ios, SIGINT, SIGTERM)
+ros2socketcan::ros2socketcan() : Node("ros2can_bridge"), stream(ios), signals(ios, SIGINT, SIGTERM)
 {
     this->declare_parameter("CAN_INTERFACE", "can1");
     std::string can_socket = this->get_parameter("CAN_INTERFACE").as_string();
@@ -33,7 +33,7 @@ ros2socketcan::ros2socketcan() : Node("CanBridge"), stream(ios), signals(ios, SI
 
     if (bind(natsock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
     {
-        perror("Error in socket bind");
+        RCLCPP_ERROR(this->get_logger(),"Error in socket bind");
     }
 
     stream.assign(natsock);
@@ -42,18 +42,13 @@ ros2socketcan::ros2socketcan() : Node("CanBridge"), stream(ios), signals(ios, SI
     RCLCPP_INFO(this->get_logger(), (std::string("CAN-Bus to ROS 2 topic:") + publisher_->get_topic_name()).c_str());
 
     stream.async_read_some(boost::asio::buffer(&rec_frame, sizeof(rec_frame)), std::bind(&ros2socketcan::CanListener, this, std::ref(rec_frame), std::ref(stream)));
-
     signals.async_wait(std::bind(&ros2socketcan::stop, this));
-
-    boost::system::error_code ec;
 
     std::size_t (boost::asio::io_service::*run)() = &boost::asio::io_service::run;
     std::thread bt(std::bind(run, &ios));
+    RCLCPP_DEBUG(this->get_logger(),"Thread started");
     bt.detach();
-
-    rclcpp::spin(shared_from_this());
 }
-
 void ros2socketcan::stop()
 {
     RCLCPP_INFO(this->get_logger(), "End of Listener Thread. Please press strg+c again to stop the whole program.\n");
@@ -94,10 +89,10 @@ void ros2socketcan::CanSend(const can_msgs::msg::Frame msg)
         frame1.data[i] = msg.data[i];
     }
     std::stringstream out;
-    out << std::string("S | ") << frame1.can_id << std::string("| ");
+    out << std::string("S | ") << std::to_string(frame1.can_id) << std::string("| ");
     for (int j = 0; j < (int)frame1.can_dlc; j++)
     {
-        out << frame1.data[j] << std::string(" ");
+        out << std::to_string(frame1.data[j]) << std::string(" ");
     }
     out << std::endl;
     RCLCPP_DEBUG(this->get_logger(), out.str().c_str());
@@ -133,18 +128,18 @@ void ros2socketcan::CanListener(struct can_frame &rec_frame, boost::asio::posix:
     frame.id = rec_frame.can_id;
     frame.dlc = int(rec_frame.can_dlc);
 
-    s << std::string("R | ") << rec_frame.can_id << std::string("| ");
+    s << std::string("R | ") << std::to_string(rec_frame.can_id) << std::string(" | ");
     for (int i = 0; i < rec_frame.can_dlc; i++)
     {
         frame.data[i] = rec_frame.data[i];
-        s << rec_frame.data[i];
+        s << std::to_string(rec_frame.data[i]);
     }
     current_frame = frame;
     s << " | ";
 
     for (int j = 0; j < (int)rec_frame.can_dlc; j++)
     {
-        s << rec_frame.data[j] << std::string(" ");
+        s << std::to_string(rec_frame.data[j]) << " ";
     }
     s << std::endl;
     RCLCPP_DEBUG(this->get_logger(), s.str().c_str());
@@ -158,7 +153,9 @@ int main(int argc, char *argv[])
 {
     std::cout << programdescr << std::endl;
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ros2socketcan>());
-
+    auto node = std::make_shared<ros2socketcan>();
+    rclcpp::spin(node);
+    // Free up any resources being used by the node
+    rclcpp::shutdown();
     return 0;
 }
