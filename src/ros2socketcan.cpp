@@ -9,7 +9,7 @@ using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
 
-ros2socketcan::ros2socketcan() : Node("ros2can_bridge"), stream(ios), signals(ios, SIGINT, SIGTERM)
+ros2socketcan::ros2socketcan() : Node("ros2socketcan"), stream(ios), signals(ios, SIGINT, SIGTERM)
 {
     this->declare_parameter("CAN_INTERFACE", "can1");
     std::string can_socket = this->get_parameter("CAN_INTERFACE").as_string();

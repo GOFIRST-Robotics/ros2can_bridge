@@ -22,13 +22,13 @@ set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib ) 
 set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib )
 
-add_executable(ros2can_bridge src/ros2socketcan.cpp)
+add_executable(ros2socketcan src/ros2socketcan.cpp)
 
-TARGET_LINK_LIBRARIES(ros2can_bridge dl -lboost_system -pthread  -lcrypt -lm -lpthread)
+TARGET_LINK_LIBRARIES(ros2socketcan dl -lboost_system -pthread  -lcrypt -lm -lpthread)
 
-ament_target_dependencies(ros2can_bridge rclcpp std_msgs can_msgs)
+ament_target_dependencies(ros2socketcan rclcpp std_msgs can_msgs)
 
-install(TARGETS ros2can_bridge
+install(TARGETS ros2socketcan
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
